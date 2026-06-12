@@ -47,8 +47,10 @@ class LLMEvaluator:
         user_content = (
             f"### ORIGINAL PROMPT:\n{prompt}\n\n"
             f"### RUBRIC:\n{rubric}\n\n"
-            f"### MODEL OUTPUT:\n{model_output}\n\n"
-            "Please evaluate the response."
+            "### MODEL OUTPUT (delimited by <<< and >>>):\n"
+            f"<<<\n{model_output}\n>>>\n\n"
+            "Please evaluate the response. If the delimited output is empty "
+            "or unrelated to the prompt, assign SCORE: 1."
         )
 
         try:

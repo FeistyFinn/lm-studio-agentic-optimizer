@@ -101,6 +101,7 @@ class LMStudioHardwareClient:
 
             output_text: str = ""
             completion_tokens: float = 0.0
+            prompt_tokens: int = 0
 
             for chunk in response:
                 if chunk.choices and len(chunk.choices) > 0:
@@ -112,6 +113,7 @@ class LMStudioHardwareClient:
 
                 if hasattr(chunk, 'usage') and chunk.usage is not None:
                     completion_tokens = chunk.usage.completion_tokens
+                    prompt_tokens = chunk.usage.prompt_tokens
 
         except Exception as e:
             return {"error": str(e), "ttft": 0.0, "tps": 0.0, "success": False}
@@ -131,9 +133,17 @@ class LMStudioHardwareClient:
         )
         tps: float = completion_tokens / generation_time if generation_time > 0 else 0.0
 
+        # Prompt-processing (prefill) speed: tokens ingested before the first
+        # output token arrived. Only meaningful when the server reports usage.
+        prefill_tps: float | None = (
+            prompt_tokens / ttft if prompt_tokens and ttft > 0 else None
+        )
+
         return {
             "output": output_text,
             "ttft": ttft,
             "tps": tps,
+            "prompt_tokens": prompt_tokens,
+            "prefill_tps": prefill_tps,
             "success": True
         }
