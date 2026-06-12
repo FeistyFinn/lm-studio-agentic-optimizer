@@ -206,6 +206,7 @@ def run_single_trial(
         "tps": metrics["tps"],
         "prompt_tokens": metrics.get("prompt_tokens", 0),
         "prefill_tps": metrics.get("prefill_tps"),
+        "reasoning_chars": metrics.get("reasoning_chars", 0),
         "baseline_vram_gb": telemetry.baseline_vram_gb,
         "peak_vram_gb": peak_vram,
         "output_preview": (
@@ -221,11 +222,27 @@ def run_single_trial(
             result["vram_estimate_gb"] = estimate
 
     # 4. Optional quality scoring (runs after telemetry so the judge model's
-    # VRAM usage does not pollute this trial's peak)
+    # VRAM usage does not pollute this trial's peak, and before the unload
+    # below so self-judging reuses the already-loaded model)
     if judge is not None and rubric:
-        evaluation = judge.evaluate(prompt, rubric, metrics.get("output", ""))
-        result["quality_score"] = evaluation.get("score")
-        reasoning = evaluation.get("reasoning") or ""
-        result["judge_reasoning"] = reasoning[:300]
+        output = metrics.get("output", "")
+        if not output and result["reasoning_chars"] > 0:
+            # The model spent the whole token budget thinking — a benchmark
+            # configuration artifact, not a quality signal. Raise
+            # BENCH_MAX_TOKENS to give reasoning models room to answer.
+            result["quality_score"] = None
+            result["judge_reasoning"] = (
+                "skipped: reasoning consumed the token budget "
+                f"({result['reasoning_chars']} reasoning chars, no output)"
+            )
+        else:
+            evaluation = judge.evaluate(prompt, rubric, output)
+            result["quality_score"] = evaluation.get("score")
+            reasoning = evaluation.get("reasoning") or ""
+            result["judge_reasoning"] = reasoning[:300]
+
+    # 5. Leave VRAM as we found it — otherwise the tested model stays
+    # resident and skews every subsequent trial of a *different* model
+    client.unload_model(model)
 
     return result

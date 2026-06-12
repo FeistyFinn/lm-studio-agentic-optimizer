@@ -32,6 +32,15 @@ def make_client(load_ok=True, metrics=None):
     return client
 
 
+def test_trial_unloads_model_before_and_after(telemetry):
+    client = make_client()
+
+    run_single_trial("m", 2048, 0.5, "prompt", client=client)
+
+    # Fresh VRAM before the trial, and no resident model left behind after
+    assert client.unload_model.call_count == 2
+
+
 def test_success_result_shape(telemetry):
     result = run_single_trial("m", 2048, 0.5, "prompt", client=make_client())
 
