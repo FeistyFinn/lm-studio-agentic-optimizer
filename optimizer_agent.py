@@ -1,46 +1,65 @@
-import optuna
 import json
 import os
+import sys
 import time
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
+
+import optuna
+
 from lm_studio_client import LMStudioHardwareClient
+
+GPU_RATIO_CHOICES = [round(x * 0.1, 1) for x in range(11)]
+
 
 class HardwareOptimizerAgent:
     def __init__(self, dataset_path: str = "dataset.json") -> None:
         self.client: LMStudioHardwareClient = LMStudioHardwareClient()
         self.model: str = os.getenv("TARGET_MODEL", "local-model")
 
+        # TPS at which the reward's throughput term saturates. Tune to your
+        # hardware via the TPS_REWARD_CEILING env var.
+        self.tps_reward_ceiling: float = float(
+            os.getenv("TPS_REWARD_CEILING", "50.0")
+        )
+
         self.dataset: List[Dict[str, str]]
         try:
             with open(dataset_path, "r") as f:
                 self.dataset = json.load(f)
-        except Exception:
+        except Exception as e:
+            print(
+                f"WARNING: failed to load dataset '{dataset_path}' ({e}). "
+                "Falling back to a trivial default prompt.",
+                file=sys.stderr,
+            )
             self.dataset = [{"prompt": "Test prompt."}]
 
         self.current_trial_stats: Dict[str, Any] = {}
 
     def objective(self, trial: optuna.Trial) -> float:
         # Hardware Parameters
-        context_length: int = trial.suggest_categorical("context_length", [1024, 2048, 4096, 8192])
-        gpu_ratio: float = trial.suggest_float("gpu_ratio", 0.0, 1.0, step=0.1)
+        context_length: int = trial.suggest_categorical(
+            "context_length", [1024, 2048, 4096, 8192]
+        )
+        gpu_ratio: float = trial.suggest_categorical("gpu_ratio", GPU_RATIO_CHOICES)
 
         self.current_trial_stats = {
             "context_length": context_length,
             "gpu_ratio": gpu_ratio,
             "tps": 0.0,
             "ttft": 0.0,
-            "status": "Running"
+            "status": "Running",
         }
 
         # 1. Unload existing to clear VRAM
         self.client.unload_model(self.model)
-        time.sleep(2) # Give OS time to free VRAM
+        time.sleep(2)  # Give OS time to free VRAM
 
         # 2. Attempt to load with new hardware constraints
         success: bool = self.client.load_model(self.model, context_length, gpu_ratio)
         if not success:
             self.current_trial_stats["status"] = "OOM/Load Fail"
-            return 0.0 # Heavy penalty for failing to load
+            return 0.0  # Heavy penalty for failing to load
 
         # 3. Benchmark
         prompt: str = self.dataset[0]["prompt"]
@@ -61,7 +80,7 @@ class HardwareOptimizerAgent:
         # We want to maximize context window, maximize TPS, and minimize TTFT.
         # Normalize context (e.g. 8192 / 8192 = 1.0)
         norm_context: float = context_length / 8192.0
-        norm_tps: float = min(tps / 50.0, 1.0) # Assume 50 is peak
+        norm_tps: float = min(tps / self.tps_reward_ceiling, 1.0)
 
         # TTFT penalty: if it takes 10 seconds to start, that's bad.
         ttft_penalty: float = min(ttft / 10.0, 1.0)
@@ -75,7 +94,11 @@ class HardwareOptimizerAgent:
 
         return final_reward
 
-    def run_optimization(self, n_trials: int = 10, callback: Optional[Callable[[optuna.Trial, Dict[str, Any]], None]] = None) -> optuna.trial.FrozenTrial:
+    def run_optimization(
+        self,
+        n_trials: int = 10,
+        callback: Optional[Callable[[optuna.Trial, Dict[str, Any]], None]] = None,
+    ) -> optuna.trial.FrozenTrial:
         study: optuna.Study = optuna.create_study(direction="maximize")
 
         # Wrap callback to pass current stats
