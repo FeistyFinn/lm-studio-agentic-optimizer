@@ -39,3 +39,5 @@ coverage.xml
 results.json
 leaderboard.md
 out.md
+optimal_settings.json
+benchmark_results.json

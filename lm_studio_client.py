@@ -1,18 +1,32 @@
-import time
 import os
+import subprocess
+import time
 from typing import Any, Dict
-from openai import OpenAI
+
 import lmstudio
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 
-import subprocess
+
+def is_wsl() -> bool:
+    """Detect whether we are running inside WSL."""
+    if os.getenv("WSL_DISTRO_NAME") or os.getenv("WSL_INTEROP"):
+        return True
+    try:
+        with open("/proc/version") as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
+
 
 def get_wsl_host_ip() -> str:
     """Helper to dynamically resolve the Windows host IP from inside WSL2."""
     try:
-        output = subprocess.check_output(["ip", "route", "show", "default"]).decode("utf-8")
+        output = subprocess.check_output(
+            ["ip", "route", "show", "default"]
+        ).decode("utf-8")
         parts = output.split()
         if "via" in parts:
             idx = parts.index("via")
@@ -21,10 +35,11 @@ def get_wsl_host_ip() -> str:
         pass
     return "127.0.0.1"
 
+
 class LMStudioHardwareClient:
     def __init__(self) -> None:
-        # We dynamically detect if we are in WSL and resolve the host IP
-        default_ip = get_wsl_host_ip() if os.name == "posix" and os.path.exists("/etc/resolv.conf") else "127.0.0.1"
+        # In WSL the LM Studio server runs on the Windows host, not localhost
+        default_ip = get_wsl_host_ip() if is_wsl() else "127.0.0.1"
         self.api_host: str = os.getenv("LM_STUDIO_API_HOST", f"{default_ip}:1234")
 
         # Initialize the official LM Studio SDK for robust management
@@ -36,16 +51,18 @@ class LMStudioHardwareClient:
         self.client: OpenAI = OpenAI(base_url=self.base_url, api_key=self.api_key)
 
     def unload_model(self, model_id: str) -> bool:
-        """Attempts to unload a model from memory to free up VRAM using the official SDK."""
+        """Attempts to unload a model to free up VRAM using the official SDK."""
         try:
             self.lms.llm.unload(model_id)
             return True
         except Exception:
             return False
 
-    def load_model(self, model_id: str, context_length: int, gpu_offload: float) -> bool:
+    def load_model(
+        self, model_id: str, context_length: int, gpu_offload: float
+    ) -> bool:
         """
-        Dynamically loads a model with specific hardware configurations via official SDK.
+        Dynamically loads a model with specific hardware configs via the SDK.
         gpu_offload is a ratio from 0.0 to 1.0 (or "max")
         """
         gpu_offload_val: Any = "max" if gpu_offload >= 1.0 else float(gpu_offload)
@@ -78,8 +95,8 @@ class LMStudioHardwareClient:
                 messages=[{"role": "user", "content": prompt}],
                 stream=True,
                 stream_options={"include_usage": True},
-                temperature=0.1, # Keep temperature low for consistent benchmarking
-                max_tokens=250   # Cap output so we don't wait forever
+                temperature=0.1,  # Keep temperature low for consistent benchmarking
+                max_tokens=250,  # Cap output so we don't wait forever
             )
 
             output_text: str = ""
@@ -100,12 +117,18 @@ class LMStudioHardwareClient:
             return {"error": str(e), "ttft": 0.0, "tps": 0.0, "success": False}
 
         end_time: float = time.time()
-        ttft: float = (first_token_time - start_time) if first_token_time else (end_time - start_time)
+        ttft: float = (
+            (first_token_time - start_time)
+            if first_token_time
+            else (end_time - start_time)
+        )
 
         if completion_tokens == 0 and output_text:
             completion_tokens = len(output_text) / 4.0
 
-        generation_time: float = end_time - (first_token_time if first_token_time else start_time)
+        generation_time: float = end_time - (
+            first_token_time if first_token_time else start_time
+        )
         tps: float = completion_tokens / generation_time if generation_time > 0 else 0.0
 
         return {

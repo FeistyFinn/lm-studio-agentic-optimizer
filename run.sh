@@ -1,3 +1,3 @@
 #!/bin/bash
-cd /mnt/c/Users/yeale/Documents/Antigravity/lm_studio_optimizer
-./.venv/bin/python3.14 main.py --trials 2
+cd "$(dirname "$0")"
+./.venv/bin/python main.py --trials 2

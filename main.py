@@ -10,13 +10,28 @@ from optimizer_agent import HardwareOptimizerAgent
 console: Console = Console()
 
 def main() -> None:
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(description="LM Studio Hardware Optimizer Agent")
-    parser.add_argument("--trials", type=int, default=10, help="Number of optimization trials to run")
-    parser.add_argument("--dataset", type=str, default="dataset.json", help="Path to the dataset JSON file")
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        description="LM Studio Hardware Optimizer Agent"
+    )
+    parser.add_argument(
+        "--trials", type=int, default=10, help="Number of optimization trials to run"
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="dataset.json",
+        help="Path to the dataset JSON file",
+    )
 
     args: argparse.Namespace = parser.parse_args()
 
-    console.print(Panel.fit("[bold blue]LM Studio Hardware Optimizer[/bold blue]\nDynamic Load Benchmarking", border_style="blue"))
+    console.print(
+        Panel.fit(
+            "[bold blue]LM Studio Hardware Optimizer[/bold blue]\n"
+            "Dynamic Load Benchmarking",
+            border_style="blue",
+        )
+    )
 
     agent: HardwareOptimizerAgent = HardwareOptimizerAgent(dataset_path=args.dataset)
 
@@ -39,17 +54,24 @@ def main() -> None:
             f"{status_color}{stats['status']}[/]"
         )
 
-    console.print(f"[yellow]Starting {args.trials} trials. LM Studio model will be dynamically unloaded and loaded.[/yellow]")
+    console.print(
+        f"[yellow]Starting {args.trials} trials. "
+        "LM Studio model will be dynamically unloaded and loaded.[/yellow]"
+    )
 
     try:
         with Live(table, refresh_per_second=4):
-            best_trial: optuna.trial.FrozenTrial = agent.run_optimization(n_trials=args.trials, callback=live_callback)
+            best_trial: optuna.trial.FrozenTrial = agent.run_optimization(
+                n_trials=args.trials, callback=live_callback
+            )
 
         if best_trial.value == 0.0:
             console.print(Panel.fit(
                 "[bold red]Optimization Failed[/bold red]\n\n"
-                "All hardware configurations resulted in a load failure or OOM error.\n"
-                "Please verify that LM Studio is running and the TARGET_MODEL in .env is exactly correct.",
+                "All hardware configurations resulted in a load failure or "
+                "OOM error.\n"
+                "Please verify that LM Studio is running and the TARGET_MODEL "
+                "in .env is exactly correct.",
                 border_style="red"
             ))
         else:
