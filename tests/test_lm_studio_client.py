@@ -79,7 +79,7 @@ def test_generate_with_metrics(client):
 
     mock_chunk_2 = MagicMock()
     mock_chunk_2.choices = [MagicMock(delta=MagicMock(content="World"))]
-    mock_chunk_2.usage = MagicMock(completion_tokens=2)
+    mock_chunk_2.usage = MagicMock(completion_tokens=2, prompt_tokens=10)
 
     client.client.chat.completions.create.return_value = [mock_chunk_1, mock_chunk_2]
 
@@ -91,6 +91,8 @@ def test_generate_with_metrics(client):
     assert result["output"] == "Hello World"
     assert result["ttft"] == 0.5
     assert result["tps"] == 1.0  # 2 tokens / 2.0s generation time
+    assert result["prompt_tokens"] == 10
+    assert result["prefill_tps"] == 20.0  # 10 prompt tokens / 0.5s TTFT
 
 
 def test_generate_with_metrics_error(client):
