@@ -47,7 +47,9 @@ def main():
         ctx = row.get("context_length", 0)
         ratio = row.get("gpu_ratio", 0)
         vram = row.get("peak_vram_gb")
-        vram = "N/A" if vram is None else vram
+        if vram is None:
+            estimate = row.get("vram_estimate_gb")
+            vram = f"~{estimate} (est)" if estimate is not None else "N/A"
         ttft = round(row.get("ttft", 0), 2)
         tps = round(row.get("tps", 0), 2)
         prefill = row.get("prefill_tps")

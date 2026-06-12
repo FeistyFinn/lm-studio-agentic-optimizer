@@ -5,6 +5,7 @@ import threading
 import time
 
 from lm_studio_client import LMStudioHardwareClient
+from lmstudio_log import latest_load_estimate_gb
 
 PRESET_PROMPTS = {
     "short": "Write a python script to calculate the fibonacci sequence.",
@@ -59,27 +60,45 @@ class TelemetryMonitor:
     before the model load so consumers can compute the delta.
     """
 
+    # Sampler commands tried in order; the first that works is kept.
+    SAMPLER_COMMANDS = (
+        ["nvidia-smi", "-q", "-d", "MEMORY"],
+        ["powershell.exe", "-c", "nvidia-smi -q -d MEMORY"],
+    )
+
     def __init__(self):
         self.peak_vram_gb = None
         self.baseline_vram_gb = None
         self.running = False
         self.thread = None
+        self._working_command = None
 
     @staticmethod
-    def _sample_vram_gb():
-        try:
-            smi_out = subprocess.check_output(
-                ["powershell.exe", "-c", "nvidia-smi -q -d MEMORY"],
-                text=True,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            return None
+    def _query_used_gb(command):
+        smi_out = subprocess.check_output(
+            command, text=True, stderr=subprocess.DEVNULL
+        )
         match = re.search(
             r"FB Memory Usage.*?\n.*?Used\s*:\s*(\d+)\s*MiB", smi_out, re.DOTALL
         )
         if match:
             return round(int(match.group(1)) / 1024.0, 1)
+        return None
+
+    def _sample_vram_gb(self):
+        commands = (
+            [self._working_command]
+            if self._working_command is not None
+            else self.SAMPLER_COMMANDS
+        )
+        for command in commands:
+            try:
+                used_gb = self._query_used_gb(command)
+            except Exception:
+                continue
+            if used_gb is not None:
+                self._working_command = command
+                return used_gb
         return None
 
     def _monitor_loop(self):
@@ -141,6 +160,7 @@ def run_single_trial(
         "model": model,
         "context_length": context_length,
         "gpu_ratio": gpu_ratio,
+        "transport": getattr(client, "transport", "sdk"),
     }
 
     # 1. Unload model to clear VRAM (so we start fresh)
@@ -192,6 +212,13 @@ def run_single_trial(
             metrics["output"][:100] + "..." if metrics.get("output") else ""
         ),
     }
+
+    # When no sampler can see the benchmark GPU (e.g. AMD cards), fall back
+    # to LM Studio's own load-size estimate from its application log.
+    if peak_vram is None:
+        estimate = latest_load_estimate_gb()
+        if estimate is not None:
+            result["vram_estimate_gb"] = estimate
 
     # 4. Optional quality scoring (runs after telemetry so the judge model's
     # VRAM usage does not pollute this trial's peak)

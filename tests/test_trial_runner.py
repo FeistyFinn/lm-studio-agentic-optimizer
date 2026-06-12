@@ -19,6 +19,7 @@ def telemetry():
 
 def make_client(load_ok=True, metrics=None):
     client = MagicMock()
+    client.transport = "sdk"
     client.load_model.return_value = load_ok
     client.generate_with_metrics.return_value = metrics or {
         "success": True,
@@ -39,7 +40,19 @@ def test_success_result_shape(telemetry):
     assert result["prefill_tps"] == 24.0
     assert result["baseline_vram_gb"] == 1.2
     assert result["peak_vram_gb"] == 8.5
+    assert result["transport"] == "sdk"
     assert "quality_score" not in result
+    assert "vram_estimate_gb" not in result
+
+
+def test_vram_estimate_fallback_when_no_telemetry(telemetry):
+    telemetry.stop.return_value = None
+
+    with patch("trial_runner.latest_load_estimate_gb", return_value=6.77):
+        result = run_single_trial("m", 2048, 1.0, "prompt", client=make_client())
+
+    assert result["peak_vram_gb"] is None
+    assert result["vram_estimate_gb"] == 6.77
 
 
 def test_oom_result(telemetry):

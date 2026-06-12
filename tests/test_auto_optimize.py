@@ -93,6 +93,39 @@ def test_ties_break_toward_larger_context():
     assert best["context_length"] == 4096
 
 
+def test_skip_ratio_search_probes_once_and_doubles_context():
+    runner = make_runner({2048: 1.0, 4096: 1.0, 8192: 1.0})
+
+    best, trials = optimize(
+        runner, max_context=8192, skip_ratio_search=True, log=quiet
+    )
+
+    # No binary search: one probe at start, then pure context doubling
+    assert runner.calls == [(2048, 1.0), (4096, 1.0), (8192, 1.0)]
+    assert best["context_length"] == 8192
+
+
+def test_skip_ratio_search_no_backoff_on_oom():
+    runner = make_runner({2048: 1.0})
+
+    best, trials = optimize(
+        runner, max_context=8192, skip_ratio_search=True, log=quiet
+    )
+
+    # 4096 OOMs; without ratio control there is nothing to back off to
+    assert runner.calls == [(2048, 1.0), (4096, 1.0)]
+    assert best["context_length"] == 2048
+
+
+def test_skip_ratio_search_start_context_fails():
+    runner = make_runner({})
+
+    best, trials = optimize(runner, skip_ratio_search=True, log=quiet)
+
+    assert best is None
+    assert runner.calls == [(2048, 1.0)]
+
+
 def test_find_max_loadable_ratio_returns_none_when_all_fail():
     def runner(ratio):
         return {"status": "OOM/Load Fail"}

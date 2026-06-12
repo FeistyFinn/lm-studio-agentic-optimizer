@@ -20,6 +20,17 @@ While there are legacy Optuna-based programmatic sweep tools (`main.py`), the pr
 - `pip install -r requirements.txt`
 - Windows Subsystem for Linux (WSL) is supported! The tools automatically detect WSL environments and bridge connections to the Windows host.
 
+### Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `LM_STUDIO_API_HOST` | Override the auto-detected `host:port` (default `127.0.0.1:1234`, WSL host IP inside WSL) |
+| `LM_STUDIO_API_TOKEN` | Bearer token for authenticated LM Studio servers (used for both transports) |
+| `LM_STUDIO_TRANSPORT` | `sdk` (default, websocket — full control incl. `gpu_ratio`) or `rest` (HTTP — works through proxies and Bearer auth, but `gpu_ratio` falls back to the server-side default) |
+| `JUDGE_BASE_URL` / `JUDGE_API_KEY` / `JUDGE_MODEL` | LLM-as-a-judge endpoint for `--judge` quality scoring |
+| `TPS_REWARD_CEILING` | TPS at which the Optuna reward saturates (default 50) |
+| `LM_STUDIO_LOG_PATH` | Path to LM Studio's `main.log` for VRAM load-size estimates (auto-discovered on WSL/Linux) |
+
 ## Agent Workflow
 
 To use this directory, simply open your favorite autonomous AI Agent inside this directory.

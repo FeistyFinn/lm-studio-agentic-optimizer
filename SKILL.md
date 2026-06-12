@@ -10,6 +10,8 @@ Your task when landing in this directory is to act as the "Intelligence" in the 
 
 All commands below assume your shell is already inside this repository directory and that a virtual environment exists at `./.venv` (`python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt`). If you are running on a Windows host and this repository lives inside WSL, prefix commands with `wsl.exe bash -c "cd <repo-path> && <command>"`.
 
+If the LM Studio server requires a Bearer token or sits behind a proxy that blocks websockets, set `LM_STUDIO_API_TOKEN=<token>` and `LM_STUDIO_TRANSPORT=rest`. In REST mode `--gpu_ratio` cannot be applied (the server-side GPU config is used) and `auto_optimize.py` automatically restricts its search to context length only.
+
 ## Available Tools
 
 1. **`list_models.py`**
