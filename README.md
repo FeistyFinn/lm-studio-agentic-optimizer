@@ -4,6 +4,8 @@ This repository contains tools to programmatically discover, test, and optimize 
 
 While there are legacy Optuna-based programmatic sweep tools (`main.py`), the primary focus of this repository is to act as an **Agentic Tool Suite**. By pointing an autonomous coding agent (such as Antigravity, Claude Code, or Hermes) at this directory, the agent can use its own intelligence to benchmark your models and optimize your hardware settings.
 
+A sample benchmark sweep against three Gemma/Qwen models on an AMD WX 7100 lives in [BENCHMARKS.md](BENCHMARKS.md).
+
 ## Features
 
 - **Agentic Native**: Fully encapsulated skills via `.claudeproject` and `SKILL.md` to teach AI agents how to optimize your system.
@@ -19,6 +21,17 @@ While there are legacy Optuna-based programmatic sweep tools (`main.py`), the pr
 - Python 3.10+
 - `pip install -r requirements.txt`
 - Windows Subsystem for Linux (WSL) is supported! The tools automatically detect WSL environments and bridge connections to the Windows host.
+
+### Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `LM_STUDIO_API_HOST` | Override the auto-detected `host:port` (default `127.0.0.1:1234`, WSL host IP inside WSL) |
+| `LM_STUDIO_API_TOKEN` | Bearer token for authenticated LM Studio servers (used for both transports) |
+| `LM_STUDIO_TRANSPORT` | `sdk` (default, websocket — full control incl. `gpu_ratio`) or `rest` (HTTP — works through proxies and Bearer auth, but `gpu_ratio` falls back to the server-side default) |
+| `JUDGE_BASE_URL` / `JUDGE_API_KEY` / `JUDGE_MODEL` | LLM-as-a-judge endpoint for `--judge` quality scoring |
+| `TPS_REWARD_CEILING` | TPS at which the Optuna reward saturates (default 50) |
+| `LM_STUDIO_LOG_PATH` | Path to LM Studio's `main.log` for VRAM load-size estimates (auto-discovered on WSL/Linux) |
 
 ## Agent Workflow
 

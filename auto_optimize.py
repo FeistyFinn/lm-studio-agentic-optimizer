@@ -57,6 +57,7 @@ def optimize(
     start_context: int = 2048,
     max_context: int = 16384,
     ratio_step: float = 0.1,
+    skip_ratio_search: bool = False,
     log=print,
 ):
     """Deterministic search for the best (context_length, gpu_ratio) config.
@@ -79,13 +80,20 @@ def optimize(
         log(f"  -> {result['status']} (tps={result.get('tps', 0.0):.2f})")
         return result
 
-    ratios = _ratio_grid(ratio_step)
-    log(f"Phase 1: finding max loadable gpu_ratio at context {start_context}")
-    ratio, _ = find_max_loadable_ratio(
-        lambda r: run_at(start_context, r), ratios
-    )
+    if skip_ratio_search:
+        # e.g. REST transport: gpu_ratio cannot be applied, so searching it
+        # would only measure noise. Probe the starting context once.
+        log("Phase 1: skipping gpu_ratio search (transport cannot apply it)")
+        result = run_at(start_context, 1.0)
+        ratio = 1.0 if result["status"] == "Success" else None
+    else:
+        ratios = _ratio_grid(ratio_step)
+        log(f"Phase 1: finding max loadable gpu_ratio at context {start_context}")
+        ratio, _ = find_max_loadable_ratio(
+            lambda r: run_at(start_context, r), ratios
+        )
     if ratio is None:
-        log("No gpu_ratio loads at the starting context; aborting.")
+        log("Nothing loads at the starting context; aborting.")
         return None, trials
 
     log(f"Phase 2: growing context from {start_context} (ratio {ratio})")
@@ -99,7 +107,7 @@ def optimize(
 
         backed_off = False
         r = ratio
-        for _ in range(MAX_RATIO_BACKOFF_STEPS):
+        for _ in range(0 if skip_ratio_search else MAX_RATIO_BACKOFF_STEPS):
             r = round(r - ratio_step, 2)
             if r < 0:
                 break
@@ -165,6 +173,10 @@ def main():
 
         judge = LLMEvaluator()
 
+    from lm_studio_client import LMStudioHardwareClient
+
+    client = LMStudioHardwareClient()
+
     def runner(context_length, gpu_ratio):
         result = run_single_trial(
             model=args.model,
@@ -173,6 +185,7 @@ def main():
             prompt=prompt,
             judge=judge,
             rubric=rubric,
+            client=client,
         )
         if args.results:
             append_result(args.results, result)
@@ -186,6 +199,7 @@ def main():
         start_context=args.start_context,
         max_context=args.max_context,
         ratio_step=args.ratio_step,
+        skip_ratio_search=(client.transport == "rest"),
         log=log,
     )
 

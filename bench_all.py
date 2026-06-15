@@ -12,10 +12,7 @@ from optimizer_agent import HardwareOptimizerAgent  # noqa: E402
 
 
 def discover_models():
-    client = LMStudioHardwareClient()
-    return [
-        getattr(m, "model_key", str(m)) for m in client.lms.llm.list_downloaded()
-    ]
+    return LMStudioHardwareClient().list_models()
 
 
 def main():
